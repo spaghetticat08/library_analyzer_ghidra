@@ -11,7 +11,9 @@ import ghidra.app.script.GhidraScript;
 
 public class LibraryParser {
 	
-	public HashMap<String, String> build_library_function_byte_mapping(Program currentProgram, TaskMonitor monitor) {
+	
+	
+	public static HashMap<String, String> build_library_function_byte_mapping(Program currentProgram, TaskMonitor monitor) {
 		HashMap<String, String> functionByteMapping = new HashMap<String, String>();
 		
 		// This function assumes to use the bytes per identified function in Ghidra
@@ -33,7 +35,7 @@ public class LibraryParser {
 	}
 	
 	
-	public String get_bytes_in_function(Program currentProgram, Function function) {
+	public static String get_bytes_in_function(Program currentProgram, Function function) {
 		String functionBytes = null;
 		
 		AddressSetView functionBody = function.getBody();
@@ -49,10 +51,10 @@ public class LibraryParser {
 			}
 			
 		}
-		
-		
 		return functionBytes;
 	}
 
+	
+	
 	
 }
