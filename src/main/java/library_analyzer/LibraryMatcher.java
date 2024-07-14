@@ -1,7 +1,32 @@
 package library_analyzer;
 
+import java.util.Arrays;
+
 public class LibraryMatcher {
 
+	/**
+	 * 
+	 * @param analysisBytecode
+	 * @param referenceBytecode
+	 * @param neutralizeBlIns
+	 * @return
+	 */
+	public static boolean compare_and_match_bytes_bytecode(byte[] analysisBytecode, byte[] referenceBytecode, boolean neutralizeBlIns) {
+		boolean foundMatch = false;
+		
+		if (neutralizeBlIns == true) {
+			analysisBytecode = LibraryUtilities.neutralize_arm_bl_instructions(analysisBytecode);
+			referenceBytecode = LibraryUtilities.neutralize_arm_bl_instructions(referenceBytecode);
+		}
+		
+		foundMatch = Arrays.equals(analysisBytecode, referenceBytecode);
+		
+		return foundMatch;
+	}
+	
+	
+	
+	
 	/** TODO: likely we cannot do bytepattern matching using String datatype!
 	 * 
 	 * @param analysisBytecode
@@ -9,7 +34,7 @@ public class LibraryMatcher {
 	 * @param neutralizeBlIns
 	 * @return
 	 */
-	public static boolean compare_and_match_bytecode(String analysisBytecode, String referenceBytecode, boolean neutralizeBlIns) {
+	public static boolean compare_and_match_bytecode_str_version(String analysisBytecode, String referenceBytecode, boolean neutralizeBlIns) {
 		boolean foundMatch = false;
 		
 		if (neutralizeBlIns == true) {

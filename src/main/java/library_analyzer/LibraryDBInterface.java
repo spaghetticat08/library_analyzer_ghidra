@@ -120,21 +120,24 @@ public class LibraryDBInterface {
 	 * @param functionBytes
 	 * TODO: functionbytes is a BLOB type in the database, I think we likely should use a byte array iso string due to encoding
 	 */
-	public static void insert_into_functions_table(int libraryId, String functionName, String functionBytes) {
+	public static void insert_into_functions_table(int libraryId, String functionName, byte[] functionBytes) {
 		if (libraryId <= 0 || functionName == null || functionBytes == null) {
 			throw new IllegalArgumentException();
 		}
 		
-		String sql_insert = String.format("INSERT INTO functions(libraryId, functionName, functionBytecode)"
-				+ " VALUES (%d, '%s', '$s')", libraryId, functionName, functionBytes);
+		String sql_insert = "INSERT INTO functions(libraryId, functionName, functionBytecode) VALUES (?,?,?)";
 		
 		try (Connection conn = DriverManager.getConnection(db_url);
-				Statement stmt = conn.createStatement()) {
-				stmt.executeUpdate(sql_insert);
+			PreparedStatement pstmt = conn.prepareStatement(sql_insert)) {
 				
-				stmt.close();
-				conn.commit();
-				conn.close();
+			pstmt.setInt(1, libraryId);
+			pstmt.setString(2, functionName);
+			pstmt.setBytes(3, functionBytes);
+			pstmt.executeUpdate();
+				
+			pstmt.close();
+			conn.commit();
+			conn.close();
 		} catch (SQLException e) {
 			System.out.println(e.getMessage());
 		}
@@ -319,22 +322,32 @@ public class LibraryDBInterface {
 		return libraryHeaders;
 	}
 	
-	
-	public static boolean check_function_exists(Integer libraryId, String functionName, String functionBytecode) {
+	/**
+	 * 
+	 * @param libraryId
+	 * @param functionName
+	 * @param functionBytecode
+	 * @return
+	 */
+	public static boolean check_function_exists(Integer libraryId, String functionName, byte[] functionBytecode) {
 		boolean functionExists = false;
 		
-		String sql_select = String.format("SELECT functionId FROM functions where libraryId = %d AND "
-				+ "functionName = '%s' and functionByteCode = '%s'", libraryId, functionName, functionBytecode);
+		String sql_select = "SELECT functionId FROM functions WHERE libraryId=? AND functionName=? AND functionBytecode=?";
 		
 		try (Connection conn = DriverManager.getConnection(db_url);
-			Statement stmt = conn.createStatement()) {
-			ResultSet rs = stmt.executeQuery(sql_select);
+		
+			PreparedStatement pstmt = conn.prepareStatement(sql_select)) {
+			pstmt.setInt(1, libraryId);
+			pstmt.setString(2, functionName);
+			pstmt.setBytes(3, functionBytecode);
+			
+			ResultSet rs = pstmt.executeQuery();
 			if (rs.next()) {
 				functionExists = true;
 			}
 			
 			rs.close();
-			stmt.close();
+			pstmt.close();
 			conn.close();
 		} catch (SQLException e) {
 			System.out.println(e.getMessage());
@@ -349,8 +362,8 @@ public class LibraryDBInterface {
 	 * work with objects. For now the dirty solution is to retrieve a functionname in a seperate function on need-basis
 	 * @return
 	 */
-	public static HashMap<Integer, String> load_function_bytes(){
-		HashMap<Integer, String> functionid_bytecode_map = new HashMap<Integer, String>();
+	public static HashMap<Integer, byte[]> load_function_bytes(){
+		HashMap<Integer, byte[]> functionid_bytecode_map = new HashMap<Integer, byte[]>();
 		
 		String sql_select = "SELECT functionId, functionBytecode FROM functions";
 		
@@ -359,7 +372,7 @@ public class LibraryDBInterface {
 			ResultSet rs = stmt.executeQuery(sql_select);
 			
 			while (rs.next()) {
-				functionid_bytecode_map.put(rs.getInt("functionId"), rs.getString("functionBytecode"));
+				functionid_bytecode_map.put(rs.getInt("functionId"), rs.getBytes("functionBytecode"));
 			}
 			rs.close();
 			stmt.close();

@@ -15,7 +15,10 @@
  */
 package library_analyzer;
 
+import java.io.BufferedWriter;
 import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -146,28 +149,42 @@ public class library_analyzerAnalyzer extends AbstractAnalyzer {
 
 		// TODO: Perform analysis when things get added to the 'program'.  Return true if the
 		// analysis succeeded.
-		
-		// Depending on the option chosen, we will either perform analysis on the current file and add it as library 
-		
-		if (analyzerAction == CHOOSER_ANALYZE) {
-			analyze_library_and_store_in_db(program, monitor);
-		} else if (analyzerAction == CHOOSER_MATCH) {
+		boolean analysisSucceeded = false;
+		try {
+			BufferedWriter outputFile = new BufferedWriter(new FileWriter("library_analyzer_output.txt"));
+			outputFile.write("Starting a new run of library_analyzer....");
+			// Depending on the option chosen, we will either perform analysis on the current file and add it as library 
 			
-		} else {
-			// no valid action chosen, do nothing
+			if (analyzerAction == CHOOSER_ANALYZE) {
+				analyze_library_and_store_in_db(program, monitor, outputFile);
+				analysisSucceeded = true;
+			} else if (analyzerAction == CHOOSER_MATCH) {
+				search_function_matches(program, monitor, outputFile);
+				analysisSucceeded = true;
+			} else {
+				// no valid action chosen, do nothing
+				analysisSucceeded = false;
+				System.out.println("No valid option chosen, skipping the analyzer!");
+			}
+			
+			
+			outputFile.close();
+		} catch (IOException e) {
+			System.out.println(e.getMessage());
 		}
-		
-		return false;
+		return analysisSucceeded;
 	}
 	
 	/**
 	 * 
 	 * @param program
 	 * @param monitor
+	 * @throws IOException 
 	 */
-	public void analyze_library_and_store_in_db(Program program, TaskMonitor monitor) {
+	public void analyze_library_and_store_in_db(Program program, TaskMonitor monitor, BufferedWriter outputFile) throws IOException {
+		outputFile.write("Entering function analyze_library_and_store_in_db....");
 		// Call function to parse all functions and get bytes per function
-		HashMap<String, String> function_bytecode_map = new HashMap<String, String> ();
+		HashMap<String, byte[]> function_bytecode_map = new HashMap<String, byte[]> ();
 		Integer f_libraryId;
 		function_bytecode_map = LibraryParser.build_library_function_byte_mapping(program, monitor);
 		// Retrieve the library if it already exists in database
@@ -177,14 +194,14 @@ public class library_analyzerAnalyzer extends AbstractAnalyzer {
 			// If library does not exists, create new library in database
 			f_libraryId = LibraryDBInterface.insert_into_libraries_table(libraryName, platformArchitecture, compilerType, compilerFlags, headerFiles);
 			// iterate through our hashmap and add all functions
-			for (HashMap.Entry<String, String> set : function_bytecode_map.entrySet()) {
+			for (HashMap.Entry<String, byte[]> set : function_bytecode_map.entrySet()) {
 				LibraryDBInterface.insert_into_functions_table(f_libraryId, set.getKey(), set.getValue());
 			}
 		} else {
 			HashMap.Entry<Integer, String> entry = library_includes_map.entrySet().iterator().next();
 			f_libraryId = entry.getKey();
 			
-			for (HashMap.Entry<String, String> set : function_bytecode_map.entrySet()) {
+			for (HashMap.Entry<String, byte[]> set : function_bytecode_map.entrySet()) {
 				// To prevent duplicate functions we should for every insert first check whether this function already exists.
 				if (LibraryDBInterface.check_function_exists(f_libraryId, set.getKey(), set.getValue()) == false) {
 					LibraryDBInterface.insert_into_functions_table(f_libraryId, set.getKey(), set.getValue());
@@ -193,21 +210,21 @@ public class library_analyzerAnalyzer extends AbstractAnalyzer {
 		}
 	}
 	
-	public void search_function_matches(Program program, TaskMonitor monitor) {
-		
-		HashMap<String, String> ghidra_function_bytecode_map = new HashMap<String, String>();
+	public void search_function_matches(Program program, TaskMonitor monitor, BufferedWriter outputFile) throws IOException {
+		outputFile.write("Entering function search_function_matches....");
+		HashMap<String, byte[]> ghidra_function_bytecode_map = new HashMap<String, byte[]>();
 		ghidra_function_bytecode_map = LibraryParser.build_library_function_byte_mapping(program, monitor);
-		HashMap<Integer, String> db_function_bytecode_map = new HashMap<Integer, String>();
+		HashMap<Integer, byte[]> db_function_bytecode_map = new HashMap<Integer, byte[]>();
 		db_function_bytecode_map = LibraryDBInterface.load_function_bytes();
 		
-		for (HashMap.Entry<String, String> analysisSet : ghidra_function_bytecode_map.entrySet()) {
-			String analysisBytecode = analysisSet.getValue();
-			for (HashMap.Entry<Integer, String> referenceSet : db_function_bytecode_map.entrySet()) {
-				String referenceBytecode = referenceSet.getValue();
+		for (HashMap.Entry<String, byte[]> analysisSet : ghidra_function_bytecode_map.entrySet()) {
+			byte[] analysisBytecode = analysisSet.getValue();
+			for (HashMap.Entry<Integer, byte[]> referenceSet : db_function_bytecode_map.entrySet()) {
+				byte[] referenceBytecode = referenceSet.getValue();
 				Integer f_functionId = referenceSet.getKey();
 				// do matching here. Still need to figure out how we can do this in most elegant way.
 				// TODO: the third parameter should definitely not be hardcoded!
-				if (LibraryMatcher.compare_and_match_bytecode(analysisBytecode, referenceBytecode, true)) {
+				if (LibraryMatcher.compare_and_match_bytes_bytecode(analysisBytecode, referenceBytecode, true)) {
 					// function returns true if both bytecodes match
 					// we use the referenceset to retrieve the id of the function and with that the linked libraryId
 					Integer f_libraryId = LibraryDBInterface.get_linked_libraryid_from_function_id(f_functionId);
