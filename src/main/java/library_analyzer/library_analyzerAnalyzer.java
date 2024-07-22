@@ -39,7 +39,11 @@ import ghidra.program.model.listing.*;
  * TODO: Provide class-level documentation that describes what this analyzer does.
  */
 public class library_analyzerAnalyzer extends AbstractAnalyzer {
-
+	
+	private static final String OPTION_NAME_FIRST_TIME_DB_SETUP = "Setup database for first time";
+	private static final String OPTION_DESCRIPTION_FIRST_TIME_DB_SETUP = "Enable the option to set up the database and the required tables. Only need to run once";
+	private static final boolean OPTION_DEFAULT_FIRST_TIME_DB_SETUP = false;
+	
 	private static final String OPTION_NAME_ACTION_CHOOSER = "Action Chooser";
 	private static final String OPTION_DESCRIPTION_ACTION_CHOOSER = "Choose whether to analyze a new library or match the functions";
 
@@ -50,7 +54,7 @@ public class library_analyzerAnalyzer extends AbstractAnalyzer {
 	private static final String CHOOSER_MATCH = "Match";
 	
 	private static final String OPTION_NAME_LIBRARY_NAME = "Library Name";
-	private static final String OPTION_DESCRIPTION_LIBRARY_NAME = "The name of the library, by default ghidra will use the current file name";
+	private static final String OPTION_DESCRIPTION_LIBRARY_NAME = "The name of the library, by default the file name";
 	
 	private static final String OPTION_NAME_COMPILER_TYPE = "Compiler";
 	private static final String OPTION_DESCRIPTION_COMPILER_TYPE = "The compiler the executable has been compiled with";
@@ -63,6 +67,8 @@ public class library_analyzerAnalyzer extends AbstractAnalyzer {
 	
 	private static final String OPTION_NAME_HEADER_FILES = "Headerfiles";
 	private static final String OPTION_DESCRIPTION_HEADER_FILES = "The name of the headerfiles (#includes) required to compile this library";
+	
+	private static final String OPTION_GENERIC_DEFAULT = "generic";
 	
 	//public Program currentProgram = getCurrentProgram();
 	public enum AnalyzerTask {
@@ -78,6 +84,7 @@ public class library_analyzerAnalyzer extends AbstractAnalyzer {
 	private String compilerFlags;
 	private String platformArchitecture;
 	private String headerFiles;
+	private boolean setupDBEnabled = OPTION_DEFAULT_FIRST_TIME_DB_SETUP;
 	
 		
 	public library_analyzerAnalyzer() {
@@ -112,16 +119,20 @@ public class library_analyzerAnalyzer extends AbstractAnalyzer {
 		chooserList.add("Analyze library");
 		chooserList.add("Match library");
 		
-		
+		options.registerOption(OPTION_NAME_FIRST_TIME_DB_SETUP, setupDBEnabled, null, OPTION_DESCRIPTION_FIRST_TIME_DB_SETUP);				
 		options.registerOption(OPTION_NAME_ACTION_CHOOSER, OptionType.STRING_TYPE, CHOOSER_ANALYZE, 
 				null, OPTION_DESCRIPTION_ACTION_CHOOSER,() -> new StringWithChoicesEditor(chooserList));
 		
-		options.registerOption(OPTION_DESCRIPTION_LIBRARY_NAME, program.getName(), null, 
+		options.registerOption(OPTION_NAME_LIBRARY_NAME, program.getName(), null, 
 				OPTION_DESCRIPTION_LIBRARY_NAME);
-		options.registerOption(OPTION_NAME_PLATFORM_ARCHITECTURE, null, null, OPTION_DESCRIPTION_PLATFORM_ARCHITECTURE);
-		options.registerOption(OPTION_NAME_COMPILER_TYPE, null, null, OPTION_DESCRIPTION_COMPILER_TYPE);
-		options.registerOption(OPTION_NAME_COMPILER_FLAGS, null, null, OPTION_DESCRIPTION_COMPILER_FLAGS);
-		options.registerOption(OPTION_NAME_HEADER_FILES, null, null, OPTION_DESCRIPTION_HEADER_FILES);
+		options.registerOption(OPTION_NAME_PLATFORM_ARCHITECTURE, OptionType.STRING_TYPE,
+				OPTION_GENERIC_DEFAULT, null, OPTION_DESCRIPTION_PLATFORM_ARCHITECTURE);
+		options.registerOption(OPTION_NAME_COMPILER_TYPE, OptionType.STRING_TYPE,
+				OPTION_GENERIC_DEFAULT, null, OPTION_DESCRIPTION_COMPILER_TYPE);
+		options.registerOption(OPTION_NAME_COMPILER_FLAGS, OptionType.STRING_TYPE,
+				OPTION_GENERIC_DEFAULT, null, OPTION_DESCRIPTION_COMPILER_FLAGS);
+		options.registerOption(OPTION_NAME_HEADER_FILES, OptionType.STRING_TYPE,
+				OPTION_GENERIC_DEFAULT, null, OPTION_DESCRIPTION_HEADER_FILES);
 	
 		// This option might be unnecessary if we allow the analysis of a library only to be performed on the currently opened file in ghidra
 		//options.registerOption(OPTION_NAME_LIBRARY_PATH, OptionType.FILE_TYPE, null,
@@ -132,13 +143,22 @@ public class library_analyzerAnalyzer extends AbstractAnalyzer {
 
 	@Override
 	public void optionsChanged(Options options, Program program) {
+		// TODO: it appears there is a bug with the getString option if the default value is set to null both for setString as well as for
+		// registerOption. For now we solve this by initializing default values, but its not ideal since we can not leave fields empty and
+		// sort of uninitialize them...
+		setupDBEnabled = options.getBoolean(OPTION_NAME_FIRST_TIME_DB_SETUP, setupDBEnabled);
 		analyzerAction = options.getString(OPTION_NAME_ACTION_CHOOSER, analyzerAction);
 		//analyzeLibraryPath = options.getFile(OPTION_NAME_LIBRARY_PATH, analyzeLibraryPath);
 		libraryName = options.getString(OPTION_NAME_LIBRARY_NAME, libraryName);
-		platformArchitecture = options.getString(OPTION_NAME_PLATFORM_ARCHITECTURE, platformArchitecture);
-		compilerType = options.getString(OPTION_NAME_COMPILER_TYPE, compilerType);
-		compilerFlags = options.getString(OPTION_NAME_COMPILER_FLAGS, compilerFlags);
-		headerFiles = options.getString(OPTION_NAME_HEADER_FILES, headerFiles);
+		//platformArchitecture = options.getString(OPTION_NAME_PLATFORM_ARCHITECTURE, platformArchitecture);
+		platformArchitecture = options.getString(OPTION_NAME_PLATFORM_ARCHITECTURE, OPTION_GENERIC_DEFAULT);
+		compilerType = options.getString(OPTION_NAME_COMPILER_TYPE, OPTION_GENERIC_DEFAULT);
+		compilerFlags = options.getString(OPTION_NAME_COMPILER_FLAGS, OPTION_GENERIC_DEFAULT);
+		headerFiles = options.getString(OPTION_NAME_HEADER_FILES, OPTION_GENERIC_DEFAULT);
+		
+		//System.out.println("Options found: setupDBEnabled = " + setupDBEnabled + "\nanalyzerAction = " + analyzerAction + "\nlibraryName = "
+		//		+ libraryName + "\nplatformArchitecture = " + platformArchitecture + "\ncompilerType = " + compilerType + "\ncompilerFlags = "
+		//		 + compilerFlags + "\nheaderFiles = " + headerFiles);
 		
 	}
 	
@@ -152,19 +172,34 @@ public class library_analyzerAnalyzer extends AbstractAnalyzer {
 		boolean analysisSucceeded = false;
 		try {
 			BufferedWriter outputFile = new BufferedWriter(new FileWriter("library_analyzer_output.txt"));
-			outputFile.write("Starting a new run of library_analyzer....");
+			
+			// if the first time setup option is enabled, we need to setup the DB first
+			if (setupDBEnabled == true) {
+				outputFile.write("\nFirst time setup of database...\n");
+				LibraryDBInterface.create_new_db(outputFile);
+				LibraryDBInterface.create_db_tables(outputFile);
+			}	
+			
+			outputFile.write("Starting a new run of library_analyzer....\n");
+			outputFile.write("Options provided for this run: \n");
+			String optionsString = String.format("analyzerAction = %s\nlibraryName = %s\nplatformArchitecture = %s"
+					+ "\ncompilerType = %s\ncompilerFlags = %s\nheaderFiles = %s\n", analyzerAction, libraryName, platformArchitecture,
+					compilerType, compilerFlags, headerFiles);
+			outputFile.write(optionsString);
 			// Depending on the option chosen, we will either perform analysis on the current file and add it as library 
 			
 			if (analyzerAction == CHOOSER_ANALYZE) {
+				LibraryDBInterface.test_db_connection(outputFile);
 				analyze_library_and_store_in_db(program, monitor, outputFile);
 				analysisSucceeded = true;
 			} else if (analyzerAction == CHOOSER_MATCH) {
+				LibraryDBInterface.test_db_connection(outputFile);
 				search_function_matches(program, monitor, outputFile);
 				analysisSucceeded = true;
 			} else {
 				// no valid action chosen, do nothing
 				analysisSucceeded = false;
-				System.out.println("No valid option chosen, skipping the analyzer!");
+				outputFile.write("\nNo valid option chosen, skipping the analyzer!");
 			}
 			
 			
@@ -182,20 +217,20 @@ public class library_analyzerAnalyzer extends AbstractAnalyzer {
 	 * @throws IOException 
 	 */
 	public void analyze_library_and_store_in_db(Program program, TaskMonitor monitor, BufferedWriter outputFile) throws IOException {
-		outputFile.write("Entering function analyze_library_and_store_in_db....");
+		outputFile.write("Entering function analyze_library_and_store_in_db....\n");
 		// Call function to parse all functions and get bytes per function
 		HashMap<String, byte[]> function_bytecode_map = new HashMap<String, byte[]> ();
 		Integer f_libraryId;
-		function_bytecode_map = LibraryParser.build_library_function_byte_mapping(program, monitor);
+		function_bytecode_map = LibraryParser.build_library_function_byte_mapping(program, monitor, outputFile);
 		// Retrieve the library if it already exists in database
 		HashMap<Integer, String> library_includes_map = new HashMap<Integer, String>();
-		library_includes_map = LibraryDBInterface.get_library_by_variable_columns(libraryName, platformArchitecture, compilerType, compilerFlags, headerFiles);
+		library_includes_map = LibraryDBInterface.get_library_by_variable_columns(libraryName, platformArchitecture, compilerType, compilerFlags, headerFiles, outputFile);
 		if (library_includes_map.isEmpty()) {
 			// If library does not exists, create new library in database
-			f_libraryId = LibraryDBInterface.insert_into_libraries_table(libraryName, platformArchitecture, compilerType, compilerFlags, headerFiles);
+			f_libraryId = LibraryDBInterface.insert_into_libraries_table(libraryName, platformArchitecture, compilerType, compilerFlags, headerFiles, outputFile);
 			// iterate through our hashmap and add all functions
 			for (HashMap.Entry<String, byte[]> set : function_bytecode_map.entrySet()) {
-				LibraryDBInterface.insert_into_functions_table(f_libraryId, set.getKey(), set.getValue());
+				LibraryDBInterface.insert_into_functions_table(f_libraryId, set.getKey(), set.getValue(), outputFile);
 			}
 		} else {
 			HashMap.Entry<Integer, String> entry = library_includes_map.entrySet().iterator().next();
@@ -203,19 +238,19 @@ public class library_analyzerAnalyzer extends AbstractAnalyzer {
 			
 			for (HashMap.Entry<String, byte[]> set : function_bytecode_map.entrySet()) {
 				// To prevent duplicate functions we should for every insert first check whether this function already exists.
-				if (LibraryDBInterface.check_function_exists(f_libraryId, set.getKey(), set.getValue()) == false) {
-					LibraryDBInterface.insert_into_functions_table(f_libraryId, set.getKey(), set.getValue());
+				if (LibraryDBInterface.check_function_exists(f_libraryId, set.getKey(), set.getValue(), outputFile) == false) {
+					LibraryDBInterface.insert_into_functions_table(f_libraryId, set.getKey(), set.getValue(), outputFile);
 				}
 			}			 
 		}
 	}
 	
 	public void search_function_matches(Program program, TaskMonitor monitor, BufferedWriter outputFile) throws IOException {
-		outputFile.write("Entering function search_function_matches....");
+		outputFile.write("Entering function search_function_matches....\n");
 		HashMap<String, byte[]> ghidra_function_bytecode_map = new HashMap<String, byte[]>();
-		ghidra_function_bytecode_map = LibraryParser.build_library_function_byte_mapping(program, monitor);
+		ghidra_function_bytecode_map = LibraryParser.build_library_function_byte_mapping(program, monitor, outputFile);
 		HashMap<Integer, byte[]> db_function_bytecode_map = new HashMap<Integer, byte[]>();
-		db_function_bytecode_map = LibraryDBInterface.load_function_bytes();
+		db_function_bytecode_map = LibraryDBInterface.load_function_bytes(outputFile);
 		
 		for (HashMap.Entry<String, byte[]> analysisSet : ghidra_function_bytecode_map.entrySet()) {
 			byte[] analysisBytecode = analysisSet.getValue();
@@ -227,16 +262,19 @@ public class library_analyzerAnalyzer extends AbstractAnalyzer {
 				if (LibraryMatcher.compare_and_match_bytes_bytecode(analysisBytecode, referenceBytecode, true)) {
 					// function returns true if both bytecodes match
 					// we use the referenceset to retrieve the id of the function and with that the linked libraryId
-					Integer f_libraryId = LibraryDBInterface.get_linked_libraryid_from_function_id(f_functionId);
+					Integer f_libraryId = LibraryDBInterface.get_linked_libraryid_from_function_id(f_functionId, outputFile);
 					
 					// get the functionName from the database
-					String f_functionDbName = LibraryDBInterface.get_function_name_by_id(f_functionId);
+					String f_functionDbName = LibraryDBInterface.get_function_name_by_id(f_functionId,outputFile);
 					// get the libraryName from the database
-					String f_libraryDbName = LibraryDBInterface.get_library_name_from_libraryid(f_libraryId);
+					String f_libraryDbName = LibraryDBInterface.get_library_name_from_libraryid(f_libraryId, outputFile);
 					// get the library headerfiles from the database
-					String f_headerFiles = LibraryDBInterface.get_library_headers_from_libraryid(f_libraryId);
+					String f_headerFiles = LibraryDBInterface.get_library_headers_from_libraryid(f_libraryId, outputFile);
 					// report our match
-					System.out.println(String.format("Found a function match for %s, this matches to function %s, from library %s, using headerfiles %s", 
+					System.out.println(String.format("Found a function match for %s, this matches to function %s, from library %s, using headerfiles %s\n", 
+							analysisSet.getKey(), f_functionDbName, f_libraryDbName, f_headerFiles));
+					
+					outputFile.write(String.format("Found a function match for %s, this matches to function %s, from library %s, using headerfiles %s\n", 
 							analysisSet.getKey(), f_functionDbName, f_libraryDbName, f_headerFiles));
 					
 					// TODO: for now we only report our match, later we want to automatically adapt the ghidra listing with the

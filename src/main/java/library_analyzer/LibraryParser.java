@@ -34,7 +34,7 @@ public class LibraryParser {
 			// We map the retrieved bytes to the function name and save them in the hashmap
 			functionByteMapping.put(functionName, functionBytes);
 			outputFile.write("LibraryParser::build_library_function_byte_mapping >> "
-					+ "Adding function and bytes to the functionByteMapping: " + String.format("%s :: ", null));
+					+ "Adding function: " + functionName + "  contains function bytes: " + functionBytes + "\n");
 		
 		}			
 		return functionByteMapping;
