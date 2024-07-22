@@ -437,8 +437,9 @@ public class LibraryDBInterface {
 			ResultSet rs = stmt.executeQuery(sql_select);
 			
 			while (rs.next()) {
-				Blob blob = rs.getBlob("functionBytecode");
-				functionid_bytecode_map.put(rs.getInt("functionId"), blob.getBytes(1L,(int)blob.length()));
+				functionid_bytecode_map.put(rs.getInt("functionId"), rs.getBytes("functionBytecode"));
+				//Blob blob = rs.getBlob("functionBytecode");
+				//functionid_bytecode_map.put(rs.getInt("functionId"), blob.getBytes(1L,(int)blob.length()));
 				//outputFile.write(String.format("load_function_bytes::Found the following functionId %d with bytecode %x", ));
 			}
 			rs.close();

@@ -25,8 +25,8 @@ public class LibraryUtilities {
 		
 		byte[] blInsNeutralized = new byte[] {(byte)0xff, (byte)0xf7, (byte)0xfe, (byte)0xff};
 		
-		for (int i = 0; i < analysisBytecode.length; i++) {
-			for (int j = 0; j < blInsNegativeOffset.length; j++) {
+		for (int i = 0; i < analysisBytecode.length - 1; i++) {
+			for (int j = 0; j < blInsNegativeOffset.length - 1; j++) {
 				if (analysisBytecode[i] == blInsNegativeOffset[j]) {
 					if (analysisBytecode[i+1] == (byte)0xf7) {
 						// we have found a bl instruction with negative offset, which we should neutralize
@@ -38,7 +38,7 @@ public class LibraryUtilities {
 					}
 				}
 			}
-			for (int k = 0; k < blInsPositiveOffset.length; k++) {
+			for (int k = 0; k < blInsPositiveOffset.length - 1; k++) {
 				if (analysisBytecode[i] == blInsPositiveOffset[k]) {
 					if (analysisBytecode[i + 1] == (byte)0xf0) {
 						// we have found a bl instruction with positive offset, which we should neutralize (we will follow the same pattern

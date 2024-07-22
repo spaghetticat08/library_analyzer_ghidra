@@ -50,8 +50,8 @@ public class library_analyzerAnalyzer extends AbstractAnalyzer {
 	private static final String OPTION_NAME_LIBRARY_PATH = "Analyze File Path";
 	private static final String OPTION_DESCRIPTION_LIBRARY_PATH = "Path to the library to analyze";
 	
-	private static final String CHOOSER_ANALYZE = "Analyze";
-	private static final String CHOOSER_MATCH = "Match";
+	private static final String CHOOSER_ANALYZE = "Analyze library";
+	private static final String CHOOSER_MATCH = "Match library";
 	
 	private static final String OPTION_NAME_LIBRARY_NAME = "Library Name";
 	private static final String OPTION_DESCRIPTION_LIBRARY_NAME = "The name of the library, by default the file name";
@@ -116,8 +116,8 @@ public class library_analyzerAnalyzer extends AbstractAnalyzer {
 
 		// TODO: If this analyzer has custom options, register them here
 		List<String> chooserList = new ArrayList<>();
-		chooserList.add("Analyze library");
-		chooserList.add("Match library");
+		chooserList.add(CHOOSER_ANALYZE);
+		chooserList.add(CHOOSER_MATCH);
 		
 		options.registerOption(OPTION_NAME_FIRST_TIME_DB_SETUP, setupDBEnabled, null, OPTION_DESCRIPTION_FIRST_TIME_DB_SETUP);				
 		options.registerOption(OPTION_NAME_ACTION_CHOOSER, OptionType.STRING_TYPE, CHOOSER_ANALYZE, 
@@ -207,6 +207,7 @@ public class library_analyzerAnalyzer extends AbstractAnalyzer {
 		} catch (IOException e) {
 			System.out.println(e.getMessage());
 		}
+		System.out.println(String.format("Analysis succeeded? %b", analysisSucceeded));
 		return analysisSucceeded;
 	}
 	
@@ -274,7 +275,7 @@ public class library_analyzerAnalyzer extends AbstractAnalyzer {
 					System.out.println(String.format("Found a function match for %s, this matches to function %s, from library %s, using headerfiles %s\n", 
 							analysisSet.getKey(), f_functionDbName, f_libraryDbName, f_headerFiles));
 					
-					outputFile.write(String.format("Found a function match for %s, this matches to function %s, from library %s, using headerfiles %s\n", 
+					outputFile.write(String.format("\nFound a function match for %s, this matches to function %s, from library %s, using headerfiles %s\n", 
 							analysisSet.getKey(), f_functionDbName, f_libraryDbName, f_headerFiles));
 					
 					// TODO: for now we only report our match, later we want to automatically adapt the ghidra listing with the
